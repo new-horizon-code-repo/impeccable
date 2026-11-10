@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
+import { APPLY_PILL_TITLE } from './live-e2e/ui.mjs';
 
 const SOURCE = readFileSync(join(process.cwd(), 'skill/scripts/live-browser.js'), 'utf-8');
 const PENDING_DOCK_POSITION_SOURCE = SOURCE.match(/function positionPendingDock\(\) \{[\s\S]*?\n  \}/)?.[0] || '';
@@ -156,9 +157,8 @@ describe('live-browser source contracts', () => {
       /function pendingApplyLabel\(count\)[\s\S]{0,80}return count === 1 \? 'Apply edit' : 'Apply edits';/,
       'the staged apply pill counts removals too, so it says edits, not copy edits',
     );
-    assert.match(
-      SOURCE,
-      /pendingPillEl\.title = 'Apply edits to source';/,
+    assert.ok(
+      SOURCE.includes(`pendingPillEl.title = '${APPLY_PILL_TITLE}';`),
       'live-e2e finds the Apply pill by this title (APPLY_PILL_TITLE in tests/live-e2e/ui.mjs)',
     );
     assert.match(
