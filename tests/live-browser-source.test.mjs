@@ -158,6 +158,11 @@ describe('live-browser source contracts', () => {
     );
     assert.match(
       SOURCE,
+      /pendingPillEl\.title = 'Apply edits to source';/,
+      'live-e2e finds the Apply pill by this title (APPLY_PILL_TITLE in tests/live-e2e/ui.mjs)',
+    );
+    assert.match(
+      SOURCE,
       /function setPendingApplyLoading\(loading, count\)[\s\S]*?pendingPillSpinnerEl\.style\.display = pendingApplyInFlight \? 'inline-block' : 'none';[\s\S]*?pendingPillEl\.disabled = pendingApplyInFlight;[\s\S]*?pendingTrashBtn\.disabled = pendingApplyInFlight;[\s\S]*?schedulePendingDockPosition\(\);[\s\S]*?\n  \}/,
       'Apply copy edits should show a loading state and prevent double apply/discard while the AI batch runs',
     );
