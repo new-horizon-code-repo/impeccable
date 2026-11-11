@@ -19,6 +19,9 @@ const GLOBAL_BAR_ID = '#impeccable-live-global-bar';
 const PICKER_ID = '#impeccable-live-picker';
 const EDIT_BADGE_ID = '#impeccable-live-edit-badge';
 const PENDING_DOCK_ID = '#impeccable-live-pending-dock';
+// The Apply pill's label and aria-label change with the count and the apply
+// phase; its title is the stable handle (pendingPillEl in live-browser.js).
+export const APPLY_PILL_TITLE = 'Apply edits to source';
 // The configure-row submit button is icon-only; its accessible name is the
 // only stable handle (see buildConfigureSubmitButton in live-browser.js).
 const GO_BUTTON_ARIA_LABEL = 'Generate variants';
@@ -1184,63 +1187,54 @@ async function clickEditBadgeButton(page, label) {
   }
 }
 
-export async function assertApplyDockVisible(page, expectedCount, { timeout = 5_000 } = {}) {
-  await page.waitForFunction(
-    ({ dockSel, expected }) => {
-      const dock = window.__impeccableLiveQuery(dockSel);
-      if (!dock || dock.style.display === 'none') return false;
-      const pill = [...dock.querySelectorAll('button')].find((btn) =>
-        /Apply copy edit/.test(btn.textContent || '')
-      );
-      if (!pill || pill.style.display === 'none') return false;
-      if (expected == null) return true;
-      return parseInt(pill.dataset.count || '0', 10) === expected;
-    },
-    { dockSel: PENDING_DOCK_ID, expected: expectedCount },
+// One in-page lookup for every Apply pill wait; serialized into the page, so
+// it may only use its arguments.
+function applyPillReadyInPage({ dockSel, pillTitle, mode, expected }) {
+  const dock = window.__impeccableLiveQuery(dockSel);
+  const dockShown = !!dock && dock.style.display !== 'none';
+  const pill = dockShown
+    ? [...dock.querySelectorAll('button')].find((btn) => btn.title === pillTitle)
+    : null;
+  const pillShown = !!pill && pill.style.display !== 'none';
+  const count = pill ? parseInt(pill.dataset.count || '0', 10) : 0;
+  if (mode === 'hidden') return !pillShown || count === 0;
+  if (!pillShown) return false;
+  if (mode === 'loading') {
+    // aria-busy is set only while Apply runs. The repair decision
+    // ("Apply needs attention") is disabled but not busy, so it does not count.
+    return pill.getAttribute('aria-busy') === 'true'
+      || /Applying|Verifying|Fixing apply issue/.test(pill.textContent || '');
+  }
+  return expected == null || count === expected;
+}
+
+function waitForApplyPill(page, mode, { expected = null, timeout }) {
+  return page.waitForFunction(
+    applyPillReadyInPage,
+    { dockSel: PENDING_DOCK_ID, pillTitle: APPLY_PILL_TITLE, mode, expected },
     { timeout },
   );
+}
+
+export async function assertApplyDockVisible(page, expectedCount, { timeout = 5_000 } = {}) {
+  await waitForApplyPill(page, 'visible', { expected: expectedCount, timeout });
 }
 
 export async function waitForApplyDockHidden(page, { timeout = 10_000 } = {}) {
-  await page.waitForFunction(
-    (dockSel) => {
-      const dock = window.__impeccableLiveQuery(dockSel);
-      if (!dock || dock.style.display === 'none') return true;
-      const pill = [...dock.querySelectorAll('button')].find((btn) =>
-        /Apply copy edit/.test(btn.textContent || '')
-      );
-      return !pill || pill.style.display === 'none' || parseInt(pill.dataset.count || '0', 10) === 0;
-    },
-    PENDING_DOCK_ID,
-    { timeout },
-  );
+  await waitForApplyPill(page, 'hidden', { timeout });
 }
 
 export async function assertApplyDockLoading(page, { timeout = 5_000 } = {}) {
-  await page.waitForFunction(
-    (dockSel) => {
-      const dock = window.__impeccableLiveQuery(dockSel);
-      if (!dock || dock.style.display === 'none') return false;
-      const pill = [...dock.querySelectorAll('button')].find((btn) =>
-        /Apply copy edit|Applying|Verifying|Fixing apply issue/.test(btn.textContent || '')
-      );
-      if (!pill) return false;
-      const spinner = dock.querySelector('[aria-hidden="true"]');
-      return pill.disabled === true
-        || pill.getAttribute('aria-busy') === 'true'
-        || /Applying|Verifying|Fixing apply issue/.test(pill.textContent || '')
-        || spinner?.style?.display === 'inline-block';
-    },
-    PENDING_DOCK_ID,
-    { timeout },
-  );
+  await waitForApplyPill(page, 'loading', { timeout });
 }
 
 export async function clickApplyEdits(page) {
   const dialog = page.waitForEvent('dialog', { timeout: 5_000 })
     .then((d) => d.accept())
     .catch(() => {});
-  await page.locator(`${PENDING_DOCK_ID} button`, { hasText: /Apply copy edit/ }).click({ timeout: 5_000 });
+  await page.locator(PENDING_DOCK_ID)
+    .getByTitle(APPLY_PILL_TITLE, { exact: true })
+    .click({ timeout: 5_000 });
   await dialog;
 }
 
